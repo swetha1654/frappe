@@ -25,12 +25,14 @@ class PseudoColumnMapper(PseudoColumn):
 
 class db_type_is(Enum):
 	MARIADB = "mariadb"
+	MYSQL = "mysql"
 	POSTGRES = "postgres"
 	SQLITE = "sqlite"
 
 
 DB_TYPE_MAP = {
 	db_type_is.MARIADB: MariaDB,
+	db_type_is.MYSQL: MariaDB,  # MySQL uses same PyPika dialect as MariaDB
 	db_type_is.POSTGRES: Postgres,
 	db_type_is.SQLITE: SQLite,
 }

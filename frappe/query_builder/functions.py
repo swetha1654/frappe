@@ -161,7 +161,7 @@ JSONContains = ImportMapper(
 
 class Cast_(Function):
 	def __init__(self, value, as_type, alias=None):
-		if frappe.db.db_type == "mariadb" and (
+		if frappe.db.db_type in ("mariadb", "mysql") and (
 			(hasattr(as_type, "get_sql") and as_type.get_sql().lower() == "varchar")
 			or str(as_type).lower() == "varchar"
 		):

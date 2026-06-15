@@ -78,7 +78,12 @@ def get_count() -> int | None:
 	# We should not attempt to fetch accurate count for 2 entire minutes! (default timeout)
 	# Very short timeout is used to here to set an upper bound on damage a bad request can do.
 	# Users can request accurate count by dropping limit from arguments.
-	timeout_clause = "SET STATEMENT max_statement_time=1 FOR" if frappe.db.db_type == "mariadb" else ""
+	if frappe.db.db_type == "mariadb":
+		timeout_clause = "SET STATEMENT max_statement_time=1 FOR"
+	elif frappe.db.db_type == "mysql":
+		timeout_clause = ""  # MySQL uses max_execution_time session var, set via set_execution_timeout
+	else:
+		timeout_clause = ""
 
 	try:
 		count = frappe.db.sql(f"{timeout_clause} select count(*) from ( {partial_query} ) p")[0][0]
