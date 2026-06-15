@@ -8,7 +8,6 @@ the handful of places where MariaDB and MySQL diverge.
 Key incompatibilities fixed here vs MariaDB:
   - Statement timeout: MariaDB uses `max_statement_time` (seconds, error 1969)
                        MySQL 8 uses `max_execution_time` (ms, error 3024)
-  - FULLTEXT index:    MariaDB allows any engine; MySQL 8 requires InnoDB
   - Sequences:         MariaDB has native SEQUENCE objects;
                        MySQL 8 uses AUTO_INCREMENT (emulated via a helper table)
   - CAST(x AS varchar): MySQL 8 requires CAST(x AS CHAR)
@@ -59,25 +58,6 @@ class MySQLDatabase(MySQLConnectionUtil, MySQLExceptionUtil, MariaDBDatabase):
 	# ── Schema class ──────────────────────────────────────────────────
 	def get_table_class(self):
 		return MySQLTable
-
-	# ── FULLTEXT (global search) ───────────────────────────────────────
-	def create_global_search_table(self):
-		"""MySQL 8 FULLTEXT requires InnoDB, not MyISAM."""
-		if "__global_search" not in self.get_tables():
-			self.sql(
-				f"""CREATE TABLE __global_search (
-					doctype varchar(100),
-					name varchar({self.VARCHAR_LEN}),
-					title varchar({self.VARCHAR_LEN}),
-					content text,
-					FULLTEXT(content),
-					route varchar({self.VARCHAR_LEN}),
-					published TINYINT NOT NULL DEFAULT 0,
-					UNIQUE `doctype_name` (doctype, name)
-				) COLLATE=utf8mb4_unicode_ci
-				  ENGINE=InnoDB
-				  CHARACTER SET=utf8mb4"""
-			)
 
 	# ── Sequences (autoname = "autoincrement") ─────────────────────────
 	# MySQL 8 does not have CREATE SEQUENCE / NEXTVAL.
