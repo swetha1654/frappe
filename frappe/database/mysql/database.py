@@ -137,9 +137,14 @@ class MySQLDatabase(MySQLConnectionUtil, MySQLExceptionUtil, MariaDBDatabase):
 
 	def get_next_sequence_val(self, doctype, slug="_id_seq"):
 		"""
-		Atomically advance the sequence and return the new value.
+		Atomically advance the sequence and return the current value.
 		Respects max_value, cycle, and increment_by.
 		Raises SequenceGeneratorLimitExceeded when the sequence is exhausted.
+
+		Semantics match MariaDB/Postgres NEXTVAL:
+		  - Return `current` (what was stored as next_val)
+		  - Compute and store what the *following* call will return
+		  - Raise only when `current` itself is already beyond max_value
 		"""
 		self._ensure_sequence_table()
 		row = self.sql(
@@ -151,13 +156,18 @@ class MySQLDatabase(MySQLConnectionUtil, MySQLExceptionUtil, MariaDBDatabase):
 			return None
 
 		current, step, min_val, max_val, do_cycle = row[0]
-		next_val = current + step
 
+		# Raise if already exhausted (stored value already exceeds limit)
+		if max_val and current > max_val:
+			raise self.SequenceGeneratorLimitExceeded
+
+		# Compute what to store for the next call
+		next_val = current + step
 		if max_val and next_val > max_val:
 			if do_cycle:
-				next_val = min_val
+				next_val = min_val  # wrap around
 			else:
-				raise self.SequenceGeneratorLimitExceeded
+				next_val = max_val + step  # will trigger exhaustion on the next call
 
 		self.sql(
 			f"UPDATE {self._SEQUENCE_TABLE} SET `next_val` = %s WHERE `name` = %s",
