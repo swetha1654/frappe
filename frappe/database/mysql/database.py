@@ -70,17 +70,29 @@ class MySQLDatabase(MySQLConnectionUtil, MySQLExceptionUtil, MariaDBDatabase):
 	_SEQUENCE_TABLE = "`__frappe_sequences`"
 
 	def _ensure_sequence_table(self):
+		"""Create or migrate the __frappe_sequences helper table."""
 		self.sql_ddl(
 			f"""CREATE TABLE IF NOT EXISTS {self._SEQUENCE_TABLE} (
-				`name`        varchar(255) NOT NULL,
-				`next_val`    bigint NOT NULL DEFAULT 1,
+				`name`         varchar(255) NOT NULL,
+				`next_val`     bigint NOT NULL DEFAULT 1,
 				`increment_by` bigint NOT NULL DEFAULT 1,
-				`min_value`   bigint NOT NULL DEFAULT 1,
-				`max_value`   bigint,
-				`cycle`       tinyint(1) NOT NULL DEFAULT 0,
+				`min_value`    bigint NOT NULL DEFAULT 1,
+				`max_value`    bigint DEFAULT NULL,
+				`cycle`        tinyint(1) NOT NULL DEFAULT 0,
 				PRIMARY KEY (`name`)
 			) ENGINE=InnoDB CHARACTER SET=utf8mb4"""
 		)
+		# Migrate existing tables that were created with the old schema (name, next_val only)
+		existing_cols = {r[0] for r in self.sql("SHOW COLUMNS FROM __frappe_sequences")}
+		migrations = {
+			"increment_by": "bigint NOT NULL DEFAULT 1",
+			"min_value": "bigint NOT NULL DEFAULT 1",
+			"max_value": "bigint DEFAULT NULL",
+			"cycle": "tinyint(1) NOT NULL DEFAULT 0",
+		}
+		for col, defn in migrations.items():
+			if col not in existing_cols:
+				self.sql_ddl(f"ALTER TABLE {self._SEQUENCE_TABLE} ADD COLUMN `{col}` {defn}")
 
 	def create_sequence(
 		self,
