@@ -44,12 +44,7 @@ class ImportMapper:
 
 	def __call__(self, *args: Any, **kwds: Any) -> Callable:
 		db = db_type_is(frappe.conf.db_type)
-		# MySQL shares MariaDB's SQL dialect for all query builder functions.
-		# Fall back to MARIADB when no explicit MYSQL entry exists.
-		func = self.func_map.get(db) or self.func_map.get(db_type_is.MARIADB)
-		if func is None:
-			raise KeyError(db)
-		return func(*args, **kwds)
+		return self.func_map[db](*args, **kwds)
 
 
 class BuilderIdentificationFailed(Exception):

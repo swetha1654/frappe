@@ -39,7 +39,7 @@ class Instr(Function):
 		super().__init__("INSTR", haystack, needle, **kwargs)
 
 
-Locate = ImportMapper({db_type_is.MARIADB: Locate, db_type_is.POSTGRES: Strpos, db_type_is.SQLITE: Instr})
+Locate = ImportMapper({db_type_is.MARIADB: Locate, db_type_is.MYSQL: Locate, db_type_is.POSTGRES: Strpos, db_type_is.SQLITE: Instr})
 
 
 # for backward compatibility
@@ -64,9 +64,9 @@ class Truncate(Function):
 		super().__init__("TRUNCATE", term, decimal, **kwargs)
 
 
-GroupConcat = ImportMapper({db_type_is.MARIADB: GROUP_CONCAT, db_type_is.POSTGRES: STRING_AGG})
+GroupConcat = ImportMapper({db_type_is.MARIADB: GROUP_CONCAT, db_type_is.MYSQL: GROUP_CONCAT, db_type_is.POSTGRES: STRING_AGG})
 
-Match = ImportMapper({db_type_is.MARIADB: MATCH, db_type_is.POSTGRES: TO_TSVECTOR})
+Match = ImportMapper({db_type_is.MARIADB: MATCH, db_type_is.MYSQL: MATCH, db_type_is.POSTGRES: TO_TSVECTOR})
 
 
 class _PostgresTimestamp(ArithmeticExpression):
@@ -85,6 +85,7 @@ class _PostgresTimestamp(ArithmeticExpression):
 CombineDatetime = ImportMapper(
 	{
 		db_type_is.MARIADB: CustomFunction("TIMESTAMP", ["date", "time"]),
+		db_type_is.MYSQL: CustomFunction("TIMESTAMP", ["date", "time"]),
 		db_type_is.POSTGRES: _PostgresTimestamp,
 	}
 )
@@ -92,6 +93,7 @@ CombineDatetime = ImportMapper(
 DateFormat = ImportMapper(
 	{
 		db_type_is.MARIADB: CustomFunction("DATE_FORMAT", ["date", "format"]),
+		db_type_is.MYSQL: CustomFunction("DATE_FORMAT", ["date", "format"]),
 		db_type_is.POSTGRES: ToChar,
 	}
 )
@@ -113,6 +115,7 @@ class _PostgresUnixTimestamp(Extract):
 UnixTimestamp = ImportMapper(
 	{
 		db_type_is.MARIADB: CustomFunction("unix_timestamp", ["date"]),
+		db_type_is.MYSQL: CustomFunction("unix_timestamp", ["date"]),
 		db_type_is.POSTGRES: _PostgresUnixTimestamp,
 	}
 )
@@ -140,6 +143,7 @@ class _MariaDBJSONContains(Function):
 JSONExtract = ImportMapper(
 	{
 		db_type_is.MARIADB: _MariaDBJSONExtract,
+		db_type_is.MYSQL: _MariaDBJSONExtract,
 		db_type_is.POSTGRES: lambda field, path, **kw: field.get_json_value(path),
 	}
 )
@@ -147,6 +151,7 @@ JSONExtract = ImportMapper(
 JSONValue = ImportMapper(
 	{
 		db_type_is.MARIADB: _MariaDBJSONValue,
+		db_type_is.MYSQL: _MariaDBJSONValue,
 		db_type_is.POSTGRES: lambda field, path, **kw: field.get_text_value(path),
 	}
 )
@@ -154,6 +159,7 @@ JSONValue = ImportMapper(
 JSONContains = ImportMapper(
 	{
 		db_type_is.MARIADB: _MariaDBJSONContains,
+		db_type_is.MYSQL: _MariaDBJSONContains,
 		db_type_is.POSTGRES: lambda target, candidate, **kw: target.contains(candidate),
 	}
 )
