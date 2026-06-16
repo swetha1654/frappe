@@ -126,7 +126,7 @@ def get_invalid_link_select_items(col) -> list[dict]:
 	value_rows = get_value_row_map(col.column_values, col.value_row_numbers)
 	if col.df.fieldtype == "Link":
 		# One DB query for all distinct values; MariaDB compares names case-insensitively.
-		transform = (lambda v: cstr(v).lower()) if frappe.db.db_type == "mariadb" else cstr
+		transform = (lambda v: cstr(v).lower()) if frappe.db.db_type in ("mariadb", "mysql") else cstr
 		exists = {
 			transform(d.name)
 			for d in frappe.get_all(

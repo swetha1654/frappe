@@ -1541,12 +1541,12 @@ class Document(BaseDocument):
 						# adding str(name) avoids false cache misses that surface as invalid-link errors.
 						result_dict[str(row.name)] = row
 						# Case-insensitive key for MariaDB compatibility (strings only)
-						if frappe.db.db_type == "mariadb" and isinstance(row.name, str):
+						if frappe.db.db_type in ("mariadb", "mysql") and isinstance(row.name, str):
 							result_dict[row.name.casefold()] = row
 
 				# Store results in both caches
 				for name in names:
-					if frappe.db.db_type == "mariadb" and isinstance(name, str):
+					if frappe.db.db_type in ("mariadb", "mysql") and isinstance(name, str):
 						cached_value = (
 							result_dict.get(name)
 							or result_dict.get(str(name))

@@ -250,7 +250,7 @@ class Engine:
 		qb = frappe.local.qb
 		db_type = frappe.local.db.db_type
 
-		self.is_mariadb = db_type == "mariadb"
+		self.is_mariadb = db_type in ("mariadb", "mysql")
 		self.is_postgres = db_type == "postgres"
 		self.is_sqlite = db_type == "sqlite"
 		self.user = user or frappe.session.user
@@ -265,7 +265,7 @@ class Engine:
 		self.is_aggregate_query = False
 		self._grouped_queries = set()
 
-		assert db_type in ("mariadb", "postgres", "sqlite"), f"unexpected db_type: {db_type}"
+		assert db_type in ("mariadb", "mysql", "postgres", "sqlite"), f"unexpected db_type: {db_type}"
 
 		if isinstance(table, Table):
 			self.table = table
