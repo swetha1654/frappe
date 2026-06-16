@@ -50,6 +50,10 @@ class MySQLDatabase(MySQLConnectionUtil, MySQLExceptionUtil, MariaDBDatabase):
 
 	db_type = "mysql"
 
+	class SequenceGeneratorLimitExceeded(Exception):
+		"""Raised when a sequence reaches its max_value with cycle=False."""
+		pass
+
 	def setup_type_map(self):
 		super().setup_type_map()
 		# Keep db_type as mysql (super sets it to 'mariadb')
@@ -68,34 +72,100 @@ class MySQLDatabase(MySQLConnectionUtil, MySQLExceptionUtil, MariaDBDatabase):
 	def _ensure_sequence_table(self):
 		self.sql_ddl(
 			f"""CREATE TABLE IF NOT EXISTS {self._SEQUENCE_TABLE} (
-				`name` varchar(255) NOT NULL,
-				`next_val` bigint NOT NULL DEFAULT 1,
+				`name`        varchar(255) NOT NULL,
+				`next_val`    bigint NOT NULL DEFAULT 1,
+				`increment_by` bigint NOT NULL DEFAULT 1,
+				`min_value`   bigint NOT NULL DEFAULT 1,
+				`max_value`   bigint,
+				`cycle`       tinyint(1) NOT NULL DEFAULT 0,
 				PRIMARY KEY (`name`)
 			) ENGINE=InnoDB CHARACTER SET=utf8mb4"""
 		)
 
-	def create_sequence(self, doctype, *, check_not_exists=False, start=1, cache=0):
+	def create_sequence(
+		self,
+		doctype,
+		*,
+		check_not_exists=False,
+		temporary=False,
+		start=None,
+		start_value=None,
+		cache=0,
+		cycle=False,
+		increment_by=1,
+		min_value=1,
+		max_value=None,
+	):
+		"""
+		Emulate MariaDB/Postgres SEQUENCE using a helper table.
+
+		MySQL 8 has no native SEQUENCE type; we store per-sequence state in
+		__frappe_sequences.  `temporary` is accepted but silently ignored —
+		MySQL has no TEMPORARY tables with the same transaction scope as
+		a TEMPORARY SEQUENCE, so callers relying on automatic cleanup (e.g.
+		tests) should drop the sequence explicitly or rely on rollback.
+		"""
 		self._ensure_sequence_table()
+		effective_start = start or start_value or min_value or 1
 		if check_not_exists:
-			exists = self.sql(
-				f"SELECT 1 FROM {self._SEQUENCE_TABLE} WHERE `name` = %s", (doctype,)
-			)
-			if exists:
+			if self.sql(f"SELECT 1 FROM {self._SEQUENCE_TABLE} WHERE `name` = %s", (doctype,)):
 				return
 		self.sql(
-			f"INSERT IGNORE INTO {self._SEQUENCE_TABLE} (`name`, `next_val`) VALUES (%s, %s)",
-			(doctype, start),
+			f"""INSERT INTO {self._SEQUENCE_TABLE}
+				(`name`, `next_val`, `increment_by`, `min_value`, `max_value`, `cycle`)
+			VALUES (%s, %s, %s, %s, %s, %s)
+			ON DUPLICATE KEY UPDATE
+				`next_val`    = VALUES(`next_val`),
+				`increment_by`= VALUES(`increment_by`),
+				`min_value`   = VALUES(`min_value`),
+				`max_value`   = VALUES(`max_value`),
+				`cycle`       = VALUES(`cycle`)""",
+			(doctype, effective_start, increment_by, min_value, max_value or 0, int(cycle)),
 		)
 
-	def get_next_sequence_val(self, doctype):
+	def get_next_sequence_val(self, doctype, slug="_id_seq"):
+		"""
+		Atomically advance the sequence and return the new value.
+		Respects max_value, cycle, and increment_by.
+		Raises SequenceGeneratorLimitExceeded when the sequence is exhausted.
+		"""
 		self._ensure_sequence_table()
-		# Atomic increment inside a transaction
-		self.sql(
-			f"UPDATE {self._SEQUENCE_TABLE} SET `next_val` = LAST_INSERT_ID(`next_val` + 1) WHERE `name` = %s",
+		row = self.sql(
+			f"SELECT `next_val`, `increment_by`, `min_value`, `max_value`, `cycle` "
+			f"FROM {self._SEQUENCE_TABLE} WHERE `name` = %s FOR UPDATE",
 			(doctype,),
 		)
-		row = self.sql("SELECT LAST_INSERT_ID()")
-		return row[0][0] if row else None
+		if not row:
+			return None
+
+		current, step, min_val, max_val, do_cycle = row[0]
+		next_val = current + step
+
+		if max_val and next_val > max_val:
+			if do_cycle:
+				next_val = min_val
+			else:
+				raise self.SequenceGeneratorLimitExceeded
+
+		self.sql(
+			f"UPDATE {self._SEQUENCE_TABLE} SET `next_val` = %s WHERE `name` = %s",
+			(next_val, doctype),
+		)
+		return current
+
+	def set_next_sequence_val(self, doctype, next_val, *, slug="_id_seq", is_val_used=False):
+		"""Set the next value for the sequence (equivalent to SETVAL)."""
+		self._ensure_sequence_table()
+		# is_val_used=True means next_val has already been used, so advance by one step
+		row = self.sql(
+			f"SELECT `increment_by` FROM {self._SEQUENCE_TABLE} WHERE `name` = %s", (doctype,)
+		)
+		step = row[0][0] if row else 1
+		effective = next_val + (step if is_val_used else 0)
+		self.sql(
+			f"UPDATE {self._SEQUENCE_TABLE} SET `next_val` = %s WHERE `name` = %s",
+			(effective, doctype),
+		)
 
 	# ── Version check ─────────────────────────────────────────────────
 	def get_version(self):

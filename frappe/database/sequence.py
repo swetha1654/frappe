@@ -37,8 +37,13 @@ def create_sequence(
 		db.create_sequence(
 			doctype_name,
 			check_not_exists=check_not_exists,
-			start=start_value or 1,
+			temporary=temporary,
+			start=start_value or min_value or 1,
 			cache=cache,
+			cycle=cycle,
+			increment_by=increment_by or 1,
+			min_value=min_value or 1,
+			max_value=max_value or None,
 		)
 		return scrub(doctype_name + slug)
 
@@ -108,6 +113,10 @@ def get_next_val(doctype_name: str, slug: str = "_id_seq") -> int:
 def set_next_val(
 	doctype_name: str, next_val: int, *, slug: str = "_id_seq", is_val_used: bool = False
 ) -> None:
+	if db.db_type == "mysql":
+		db.set_next_sequence_val(doctype_name, next_val, slug=slug, is_val_used=is_val_used)
+		return
+
 	is_val_used = "false" if not is_val_used else "true"
 
 	db.multisql(
